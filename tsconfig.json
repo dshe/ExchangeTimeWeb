@@ -1,0 +1,9 @@
+ {
+   "compilerOptions": {
+    "resolveJsonModule" : true,
+    "moduleResolution": "node",
+    "outDir": "./build",
+    "target": "es6"
+   }
+ }
+ 

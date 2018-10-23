@@ -1,0 +1,10 @@
+body 
+{
+  margin: 0;
+}
+
+#myCanvas
+{
+  border: 1px solid #777;
+  background-color: black;
+}
