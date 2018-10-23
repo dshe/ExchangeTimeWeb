@@ -35,6 +35,8 @@ export class AppWindow
   public draw()
   {
     this.now = DateTime.local();
+    this.now = DateTime.fromISO("2020-07-20T11:30");
+
     this.originSeconds = this.now.toMillis() / 1000 - this.formatter.secondsPerPixel * this.canvas.width / 3; 
     //console.log("orginSeconds: "+ this.originSeconds);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -196,12 +198,10 @@ export class AppWindow
     {
         case "Holiday":
         case "Weekend":
-          rect.changeHeight(.8);
           rect.fillRect(.5);
           rect.fitText(label, "#ddd");
           break;
-        case "L":
-          rect.changeHeight(.8);          
+        case "L":          
           rect.fillRect(.9);
           if (this.formatter.secondsPerPixel < 1800)
             rect.fitText(label, "#ddd");
