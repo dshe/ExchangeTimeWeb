@@ -5,4 +5,4 @@
 - **zoom the timeline** using the mouse wheel or +/- keys
 - edit the file "data.json" to modify timeline data and add holidays
 - dependencies: https://moment.github.io/luxon
-<img src="./screencap.png" width="484" height="120">
+<img src="./screencap.png" width="730" height="200">
