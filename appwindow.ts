@@ -35,11 +35,12 @@ export class AppWindow
   public draw()
   {
     this.now = DateTime.local();
-    this.now = DateTime.fromISO("2020-07-20T11:30");
+    //this.now = DateTime.fromISO("2020-07-20T11:30");
 
     this.originSeconds = this.now.toMillis() / 1000 - this.formatter.secondsPerPixel * this.canvas.width / 3; 
     //console.log("orginSeconds: "+ this.originSeconds);
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.fillStyle = "black";
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawTopRow();
     this.drawTicks();
     this.drawRows();
