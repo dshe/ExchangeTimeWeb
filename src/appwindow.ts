@@ -191,7 +191,6 @@ export class AppWindow
         x2 = this.canvas.width - 1;
     if (x2 < 0)
         return;
-    //console.log("x1: " + x1 + ", x2: " + x2);
 
     const rect = new Rectangle(this.ctx, x1, y, x2 - x1 + 1, this.rowHeight);
 
@@ -216,7 +215,7 @@ export class AppWindow
           rect.fillRect(.9);
           break;
         default:
-          console.log("Invalid bar type: " + type);
+          throw new Error("Invalid bar type: " + type);
     }
   }
 
