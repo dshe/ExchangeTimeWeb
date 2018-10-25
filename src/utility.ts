@@ -43,11 +43,11 @@ export class Rectangle
 
 export class Utility
 {
-  public static getTextSize(ctx: CanvasRenderingContext2D, text: string) : number[]
+  public static getTextSize(ctx: CanvasRenderingContext2D, text: string) :{width:number, height:number}
   {
     const m = ctx.measureText(text);
     const height = m.fontBoundingBoxAscent + m.actualBoundingBoxDescent;
-    return [m.width, height];
+    return { width : m.width, height : height};
   }
 
 }

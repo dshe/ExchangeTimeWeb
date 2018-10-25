@@ -94,7 +94,7 @@ export class AppWindow
       {
         const text = dt.toFormat(this.formatter.majorFormat);
         const size = Utility.getTextSize(this.ctx, text);
-        const width = size[0] + 4;
+        const width = size.width + 4;
         //console.log("width:" + width);  
         const height = size[1];
         this.ctx.fillStyle = "#999";
