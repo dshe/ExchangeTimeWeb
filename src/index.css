@@ -1,10 +1,10 @@
-body 
-{
+/* don't use semi-colons! */
+
+body {
   margin: 0;
 }
 
-#myCanvas
-{
-  border: 1px solid #777;
+#myCanvas {
+  border: 2px solid #777;
   background-color: black;
 }

@@ -1,8 +1,11 @@
-import { DateTime } from "luxon";
-import { Utility, Rectangle } from "./utility";
+import { DateTime } from 'luxon';
+import * as rxjs from 'rxjs';
+import { map, tap, filter, throttleTime } from 'rxjs/operators';
+import { BarType } from './enums';
+import { Rectangle } from "./rectangle";
 import { CanvasWidthAdjuster } from "./canvasWidthAdjuster";
-import { DataParser } from "./dataParser"
-import { Format } from "./formatter";
+import { DataParser } from "./dataParser";
+import { Zoomer } from "./zoomer";
 
 export class AppWindow
 {
@@ -10,34 +13,49 @@ export class AppWindow
   private readonly fontName = "arial";
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly formatter: Format;
+  private readonly zoomer: Zoomer = new Zoomer();
   private readonly canvasWidthAdjuster: CanvasWidthAdjuster;
-  private rowHeight: number;
-  private now: DateTime;
-  private originSeconds: number;
+  private readonly rowHeight: number = 40;
+  private now: DateTime = DateTime.local();
+  private originSeconds: number = 0;
 
-  constructor(canvas : HTMLCanvasElement)
+  public constructor(ctx : CanvasRenderingContext2D)
   { 
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');    
-    this.canvasWidthAdjuster = new CanvasWidthAdjuster(canvas, this.locations.length);
-    this.formatter = new Format(() => this.draw());
-    this.rowHeight = this.canvasWidthAdjuster.adjust();
+    this.ctx = ctx;
+    this.canvas = ctx.canvas;
+
+    const height = (2 + this.locations.length) * this.rowHeight;
+    this.canvasWidthAdjuster = new CanvasWidthAdjuster(ctx.canvas, height);
     this.draw();
-    window.onresize = () => 
-    {
-      this.rowHeight = this.canvasWidthAdjuster.adjust();
-      this.draw();
-    }
-    setInterval(() => this.draw(), 1000);
+    
+    const tick = rxjs.interval(1000)
+      .pipe(map(x => "tick"));
+
+    const resize = rxjs.fromEvent<Event>(window, 'resize')
+      .pipe(throttleTime(50, undefined, { leading: true, trailing: true } ))
+      .pipe(tap(() => this.canvasWidthAdjuster.adjust()))
+      .pipe(map(() => "resize"));
+
+    const zoom = rxjs.fromEvent<WheelEvent>(document, "wheel")
+      .pipe(filter(event => event.ctrlKey === true))
+      .pipe(map(event => event.wheelDelta))
+      .pipe(filter(delta => this.zoomer.updateIndex(delta) === true))
+      .pipe(map(() => "zoom"));
+  
+    rxjs.merge<string,string, string>(resize, zoom, tick)
+      //.pipe(throttleTime(20, undefined, { leading: true, trailing: true }))
+      .subscribe((x) =>
+      {
+        //console.log("draw: " + x);
+        this.draw();
+      });
   }
 
-  public draw()
+  public draw(): void
   {
+    //now = DateTime.fromISO("2020-07-20T11:30");
     this.now = DateTime.local();
-    //this.now = DateTime.fromISO("2020-07-20T11:30");
-
-    this.originSeconds = this.now.toMillis() / 1000 - this.formatter.secondsPerPixel * this.canvas.width / 3; 
+    this.originSeconds = this.now.toMillis() / 1000 - this.zoomer.secondsPerPixel * this.canvas.width / 3; 
     //console.log("orginSeconds: "+ this.originSeconds);
     this.ctx.fillStyle = "black";
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -48,11 +66,11 @@ export class AppWindow
     //Notify(instant);
   }
 
-  private drawTopRow()
+  private drawTopRow(): void
   {
     // fill top row
     this.ctx.fillStyle = "#444";
-    this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.rowHeight);
+    this.ctx.fillRect(0, 0, this.canvas.width, this.rowHeight);
     
     // configure font
     const fontSize = this.rowHeight * .8;
@@ -64,7 +82,7 @@ export class AppWindow
     // draw timezone on left
     const y = this.rowHeight / 2;
     this.ctx.textAlign = 'left';
-    this.ctx.fillText(this.now.zoneName, 3, y);
+    this.ctx.fillText(this.now.zoneName, 6, y);
     
     // draw date in center
     this.ctx.textAlign = 'center';
@@ -72,31 +90,28 @@ export class AppWindow
   
     // draw time on right
     this.ctx.textAlign = 'right';
-    this.ctx.fillText(this.now.toLocaleString(DateTime.TIME_24_WITH_SECONDS), this.canvas.width - 3, y);
+    this.ctx.fillText(this.now.toLocaleString(DateTime.TIME_24_WITH_SECONDS), this.canvas.width - 6, y);
   }
 
-  private drawTicks()
+  private drawTicks(): void
   {
     const fontSize = this.rowHeight * .6;
     this.ctx.font = fontSize + "px " + this.fontName;
     this.ctx.textAlign = "center";
     //console.log("ticks font: " + this.ctx.font);
     
-    const firstSeconds = this.originSeconds - (this.originSeconds % this.formatter.minor) + this.formatter.minor;
+    const firstSeconds = this.originSeconds - (this.originSeconds % this.zoomer.minor) + this.zoomer.minor;
     //console.log("firstSeconds: " + firstSeconds);
-    for (let s = firstSeconds; s - firstSeconds <= this.canvas.width * this.formatter.secondsPerPixel; s += this.formatter.minor)
+    for (let s = firstSeconds; s - firstSeconds <= this.canvas.width * this.zoomer.secondsPerPixel; s += this.zoomer.minor)
     {
       //console.log("s: " + this.Str(s));
       const dt = DateTime.fromMillis(s * 1000); // local
-      var px = (s - this.originSeconds) / this.formatter.secondsPerPixel;
-      const factor = this.formatter.major == 10800 || this.formatter.major == 21600 ? 3600 : 0;
-      if ((s + factor) % this.formatter.major == 0) // && (this.formatter.secondsPerPixel < 3600 || dt.weekday == 1))
+      const px = (s - this.originSeconds) / this.zoomer.secondsPerPixel;
+      const factor = this.zoomer.major === 10800 || this.zoomer.major === 21600 ? 3600 : 0;
+      if ((s + factor) % this.zoomer.major === 0) // && (this.formatter.secondsPerPixel < 3600 || dt.weekday === 1))
       {
-        const text = dt.toFormat(this.formatter.majorFormat);
-        const size = Utility.getTextSize(this.ctx, text);
-        const width = size.width + 4;
-        //console.log("width:" + width);  
-        const height = size[1];
+        const text = dt.toFormat(this.zoomer.majorFormat);
+        const width = this.ctx.measureText(text).width + 4; 
         this.ctx.fillStyle = "#999";
         //console.log("px: "+ px + ", width: " + width);
         if (px - width/2 > 0 && px + width/2 < this.canvas.width)
@@ -112,60 +127,55 @@ export class AppWindow
     }
   }
 
-  private drawRows()
+  private drawRows(): void
   {      
     const fontSize = this.rowHeight * .6;
-    this.ctx.font = fontSize + "px " + this.fontName;
-    //console.log("Font: " + this.ctx.font);
+    this.ctx.font = fontSize + 'px ' + this.fontName;
     this.ctx.textBaseline = 'middle';
     this.ctx.textAlign = 'center';
 
     const originInstant = DateTime.fromMillis(this.originSeconds * 1000);
-    const endInstant = DateTime.fromMillis((this.originSeconds + this.formatter.secondsPerPixel * this.canvas.width)*1000);
+    const endInstant = DateTime.fromMillis((this.originSeconds + this.zoomer.secondsPerPixel * this.canvas.width)*1000);
     let y = this.rowHeight * 2;
 
     this.locations.forEach(location =>
     {
-      this.ctx.fillStyle = location.color;
-
       //console.log("location: " + location.name);
-      const dt1 = originInstant.setZone(location.timezone).startOf('day');
-      const dt2 =    endInstant.setZone(location.timezone).endOf('day');;
-      //console.log("dt1: " + dt1.toString() + "\ndt2: " + dt2.toString());
-      //Debug.Assert(dt1 < dt2);
+      this.ctx.fillStyle = location.color;
+      const zonedNow = this.now.setZone(location.zone).toFormat('H:mm');
+      const dt1 = originInstant.setZone(location.zone).startOf('day');
+      const dt2 =    endInstant.setZone(location.zone).endOf('day');
 
-      if (dt1.weekday == 7) // sunday
-        this.drawBar(y, dt1, dt1.plus({days:1}), "Weekend", "Sunday;Sun;S");
+      if (dt1.weekday === 7) // sunday
+        this.drawBar(y, dt1, dt1.plus({days:1}), BarType.Weekend, "Sunday;Sun;S");
       for (let dt = dt1; dt < dt2; dt = dt.plus({days:1}))
       {
         //console.log("dt: " + dt);
-        if (dt.weekday == 6) // saturday
-          this.drawBar(y, dt, dt.plus({ days:2 }), "Weekend", "Weekend;W");
-        if (dt.weekday == 6 || dt.weekday == 7) // skip Sundays; 2 days from Saturday covers the Weekend
+        if (dt.weekday === 6) // saturday
+          this.drawBar(y, dt, dt.plus({ days:2 }), BarType.Weekend, "Weekend;W");
+        if (dt.weekday === 6 || dt.weekday === 7) // skip Sundays; 2 days from Saturday covers the Weekend
           continue;
 
-        const holiday = location.holidays.find(h => h.date == dt1);
+        const holiday = location.holidays.find(h => h.date === dt1);
         const earlyClose = holiday && holiday.earlyClose;
         if (holiday)
         {
-          var d = earlyClose ? dt.plus(earlyClose) : dt;
-          this.drawBar(y, d, dt.plus({ days:1}), "Holiday", "Holiday: " + holiday.name + ";Holiday;H");
+          const d = earlyClose ? dt.plus(earlyClose) : dt;
+          this.drawBar(y, d, dt.plus({ days:1}), BarType.Holiday, "Holiday: " + holiday.name + ";Holiday;H");
           if (!earlyClose)
             continue;
         }
         
         for (let bar of location.bars)
         {
-          //console.log("duration: " + bar.start)
           const start = dt.plus(bar.start);
-          const end = dt.plus(earlyClose || bar.end);        
+          const end = dt.plus(earlyClose || bar.end);
           let label = bar.label;
           if (!label)
             label = location.name + " TIME";
           if (label.includes("TIME"))
-            label = label.replace(/TIME/gi, this.now.setZone(location.timezone).toFormat("H:mm"));
-          //this.ctx.fillStyle = location.color;
-          this.drawBar(y, start, end, bar.type, label);
+            label = label.replace(/TIME/gi, zonedNow);
+          this.drawBar(y, start, end, bar.barType, label);
           //console.log("label: " + label)
         }
       }
@@ -173,13 +183,12 @@ export class AppWindow
     });
   }
 
-  private drawBar(y: number, start: DateTime, end: DateTime, type: string, label: string)
+  private drawBar(y: number, start: DateTime, end: DateTime, barType: BarType, label: string): void
   {  
     if (start >= end)
         end = end.plus({days: 1});
     if (start >= end)
         return;
-    //console.log("start: " + start + ", end: " + end);
 
     let x1 = this.dateToPixels(start);
     let x2 = this.dateToPixels(end);   
@@ -194,32 +203,29 @@ export class AppWindow
 
     const rect = new Rectangle(this.ctx, x1, y, x2 - x1 + 1, this.rowHeight);
 
-    switch (type)
+    switch (barType)
     {
-        case "Holiday":
-        case "Weekend":
+        case BarType.Holiday:
+        case BarType.Weekend:
           rect.fillRect(.5);
           rect.fitText(label, "#ddd");
           break;
-        case "L":          
+        case BarType.L:
           rect.fillRect(.9);
-          if (this.formatter.secondsPerPixel < 1800)
+          if (this.zoomer.secondsPerPixel < 1800)
             rect.fitText(label, "#ddd");
           break;
-        case "M":
+        case BarType.M:
           rect.changeHeight(.3);
           rect.fillRect(.9);
           break;
-        case "S":
+        case BarType.S:
           rect.changeHeight(.1);
           rect.fillRect(.9);
-          break;
-        default:
-          throw new Error("Invalid bar type: " + type);
     }
   }
 
-  private drawCursor()
+  private drawCursor(): void
   {   
     // show gold line indicating the current point in time
     this.ctx.fillStyle = "gold";
@@ -228,8 +234,8 @@ export class AppWindow
 
   private dateToPixels(dt: DateTime): number
   {
-    var seconds = dt.toMillis()/1000;
-    var px = (seconds - this.originSeconds) / this.formatter.secondsPerPixel;
+    const seconds = dt.toMillis()/1000;
+    const px = (seconds - this.originSeconds) / this.zoomer.secondsPerPixel;
     return px;
   }
   

@@ -1,8 +1,12 @@
 import {AppWindow} from "./appwindow";
+import * as audio from "./audio";
 
-const canvas = <HTMLCanvasElement>document.getElementById('myCanvas');
+const canvas = document.getElementById('myCanvas') as HTMLCanvasElement;
 
-const appWindow = new AppWindow(canvas);
+const ctx = canvas.getContext('2d');
+if (!ctx)
+    throw new Error('Could not get canvas context.');
 
-//let offscreen: any = new OffscreenCanvas(256, 256);
+const xx = new AppWindow(ctx);
 
+//audio.talk();
