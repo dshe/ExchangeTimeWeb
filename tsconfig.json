@@ -3,7 +3,6 @@
   {
     "resolveJsonModule" : true,
     "moduleResolution": "node",
-    "outDir": "./build",
     "target": "es6",
     "strict": true
   }

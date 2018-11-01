@@ -6,8 +6,6 @@
     "@types/luxon": "^1.4.0",
     "luxon": "^1.4.4",
     "rxjs": "^6.3.3"
-  },
-  "scripts": {
-    "test": "ava"
   }
+ 
 }
