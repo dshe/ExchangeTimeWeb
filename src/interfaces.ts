@@ -1,5 +1,3 @@
-import { Duration } from "luxon";
-
 export interface LocationsEntity
 {
   name: string;

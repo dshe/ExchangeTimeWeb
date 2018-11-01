@@ -1,5 +1,6 @@
 import {AppWindow} from "./appwindow";
 import * as audio from "./audio";
+import {DateTime} from "luxon"
 
 const canvas = document.getElementById('myCanvas') as HTMLCanvasElement;
 
@@ -9,4 +10,4 @@ if (!ctx)
 
 const xx = new AppWindow(ctx);
 
-//audio.talk();
+//audio.announce("It is now [DDDD], at [tttt]. The exchange will open soon.", DateTime.local());

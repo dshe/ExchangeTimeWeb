@@ -1,15 +1,16 @@
-import { DateTime } from 'luxon';
+import { DateTime, Duration } from 'luxon';
 import * as rxjs from 'rxjs';
 import { map, tap, filter, throttleTime } from 'rxjs/operators';
 import { BarType } from './enums';
 import { Rectangle } from "./rectangle";
 import { CanvasWidthAdjuster } from "./canvasWidthAdjuster";
-import { DataParser } from "./dataParser";
+import { DataParser, Location } from "./dataParser";
 import { Zoomer } from "./zoomer";
+import * as audio from "./audio";
 
 export class AppWindow
 {
-  private readonly locations = DataParser.Parse();
+  private readonly locations: Location[] = DataParser.Parse();
   private readonly fontName = "arial";
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -26,7 +27,7 @@ export class AppWindow
 
     const height = (2 + this.locations.length) * this.rowHeight;
     this.canvasWidthAdjuster = new CanvasWidthAdjuster(ctx.canvas, height);
-    this.draw();
+    this.draw("");
     
     const tick = rxjs.interval(1000)
       .pipe(map(x => "tick"));
@@ -40,21 +41,23 @@ export class AppWindow
       .pipe(filter(event => event.ctrlKey === true))
       .pipe(map(event => event.wheelDelta))
       .pipe(filter(delta => this.zoomer.updateIndex(delta) === true))
+      .pipe(throttleTime(50, undefined, { leading: true, trailing: true }))
       .pipe(map(() => "zoom"));
   
-    rxjs.merge<string,string, string>(resize, zoom, tick)
-      //.pipe(throttleTime(20, undefined, { leading: true, trailing: true }))
-      .subscribe((x) =>
-      {
-        //console.log("draw: " + x);
-        this.draw();
-      });
+    rxjs.merge<string,string, string>(tick, resize, zoom)
+      .pipe(throttleTime(50, undefined, { leading: true, trailing: true }))
+      .subscribe((msg) => this.draw(msg));
   }
 
-  public draw(): void
+  public draw(msg: string): void
   {
+    //console.log("draw: " + msg);
     //now = DateTime.fromISO("2020-07-20T11:30");
-    this.now = DateTime.local();
+    //this.now = this.now.plus(Duration.fromMillis(1000));
+    //this.now = DateTime.local();
+    this.now = DateTime.local().minus(this.now.millisecond);
+    //console.log(this.now.toString());
+
     this.originSeconds = this.now.toMillis() / 1000 - this.zoomer.secondsPerPixel * this.canvas.width / 3; 
     //console.log("orginSeconds: "+ this.originSeconds);
     this.ctx.fillStyle = "black";
@@ -63,7 +66,6 @@ export class AppWindow
     this.drawTicks();
     this.drawRows();
     this.drawCursor();
-    //Notify(instant);
   }
 
   private drawTopRow(): void
@@ -142,9 +144,12 @@ export class AppWindow
     {
       //console.log("location: " + location.name);
       this.ctx.fillStyle = location.color;
-      const zonedNow = this.now.setZone(location.zone).toFormat('H:mm');
+      const zonedNow = this.now.setZone(location.zone);
+      const zonedNowStr= zonedNow.toFormat('H:mm');
       const dt1 = originInstant.setZone(location.zone).startOf('day');
       const dt2 =    endInstant.setZone(location.zone).endOf('day');
+      
+      this.notify(location, zonedNow);
 
       if (dt1.weekday === 7) // sunday
         this.drawBar(y, dt1, dt1.plus({days:1}), BarType.Weekend, "Sunday;Sun;S");
@@ -174,7 +179,7 @@ export class AppWindow
           if (!label)
             label = location.name + " TIME";
           if (label.includes("TIME"))
-            label = label.replace(/TIME/gi, zonedNow);
+            label = label.replace(/TIME/gi, zonedNowStr);
           this.drawBar(y, start, end, bar.barType, label);
           //console.log("label: " + label)
         }
@@ -237,6 +242,15 @@ export class AppWindow
     const seconds = dt.toMillis()/1000;
     const px = (seconds - this.originSeconds) / this.zoomer.secondsPerPixel;
     return px;
+  }
+
+  private notify(location: Location, zonedNow: DateTime)
+  {
+    location.notifications.forEach(notification => 
+    {
+      if (zonedNow.startOf("day").plus(notification.time) === zonedNow)
+        audio.announce(notification.text, zonedNow); 
+    })
   }
   
 }
