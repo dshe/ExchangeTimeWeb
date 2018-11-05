@@ -5,7 +5,7 @@ export class Zoomer
 {
   private readonly zooms = ZoomsJson as ZoomsEntity[];
   public readonly length: number;
-  private index: number = 6;
+  public index: number = -1;
 
   public constructor()
   {
@@ -31,17 +31,6 @@ export class Zoomer
   public get minor(): number
   {
     return this.zooms[this.index].minor;
-  }
-
-  public updateIndex(delta: number): boolean
-  {
-    if (delta > 0 && this.index < this.length - 1)
-      this.index++;
-    else if (delta < 0 && this.index > 0)
-      this.index--;
-    else
-      return false;
-    return true;
   }
 
 }

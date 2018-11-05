@@ -3,6 +3,7 @@
   {
     "resolveJsonModule" : true,
     "moduleResolution": "node",
+    "outDir": "nonexistant",
     "target": "es6",
     "strict": true
   }
