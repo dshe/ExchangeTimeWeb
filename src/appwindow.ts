@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon';
 import * as rxjs from 'rxjs';
-import { map, filter, throttleTime, scan, distinctUntilChanged, withLatestFrom, startWith } from 'rxjs/operators';
+import { map, tap, filter, throttleTime, scan, distinctUntilChanged, withLatestFrom, startWith } from 'rxjs/operators';
 import { Utility } from "./utility"
 import { BarType } from './enums';
 import { Rectangle } from "./rectangle";
@@ -39,36 +39,35 @@ export class AppWindow
       //.pipe(map(() => DateTime.fromISO("2020-07-20T11:30")))
       .pipe(map(dt => dt.minus(dt.millisecond)));
       
-    const resize$ = rxjs
-      .fromEvent<Event>(window, 'resize')
-      .pipe(map(() => ""))
-      .pipe(startWith(""));
-   
-      //.pipe(throttleTime(50, undefined, { leading: false, trailing: true } ));
-
     const zoomIndex$ = rxjs
       .fromEvent<WheelEvent>(document, "wheel")
-      .pipe(filter(event => event.ctrlKey === true))
-      //.pipe(throttleTime(200, undefined, { leading: true, trailing: false }))
-      .pipe(map(event => event.wheelDelta))
+      .pipe(filter(event => event.shiftKey === true))
+      .pipe(throttleTime(100, undefined, { leading: true, trailing: false }))
+      .pipe(map(event => event.deltaY))
+      //.pipe(tap(delta => console.log("delta: " + delta)))
       .pipe(map(delta => delta > 0 ? 1 : -1))
       .pipe(startWith(0))
-      .pipe(scan((acc, ev) => Utility.clamp(acc + ev, 0, this.zoomer.length - 1), 7))
+      .pipe(scan((acc, x) => Utility.clamp(acc + x, 0, this.zoomer.length - 1), 7))
       .pipe(distinctUntilChanged());
-    
+ 
+    const resize$ = rxjs
+      .fromEvent<Event>(window, 'resize')
+      .pipe(throttleTime(50, undefined, { leading: true, trailing: true } ))
+      .pipe(startWith(""))
+      .pipe(map(() => "resize"))
+      
     //combine/withLatest will not emit an initial value until each observable emits at least one value.
-    rxjs
-      .combineLatest<DateTime,string,number>(tick$, resize$, zoomIndex$)
-      //.pipe(withLatestFrom(tick$, zoomIndex$))
-      .pipe(map(a => ({ time: a[0], type: a[1], zoomIndex: a[2]})))
-      .subscribe((msg) => this.draw(msg.time, msg.type, msg.zoomIndex));
+    rxjs.merge<string,string,string>
+      (tick$.pipe(map(() => "tick")), zoomIndex$.pipe(map(() => "zoom")), resize$)
+      .pipe(withLatestFrom(tick$, zoomIndex$))
+      .subscribe((x) => this.draw(x[0], x[1], x[2]));
   }
 
-  public draw(time: DateTime, type: string, zoomIndex: number): void
+  public draw(eventType: string, time: DateTime, zoomIndex: number): void
   {
-    //console.log(time.toString() + " " + resize+ " " + zoomIndex); 
-    //if (msg.type == "resize")
-    //  this.canvasWidthAdjuster.adjust();
+    console.log(time + " " + eventType + " " + zoomIndex);
+    if (eventType === "resize")
+      this.canvasWidthAdjuster.adjust();
     this.now = time;
     this.zoomer.index = zoomIndex;  
     this.originSeconds = this.now.toMillis() / 1000 - this.zoomer.secondsPerPixel * this.canvas.width / 3; 

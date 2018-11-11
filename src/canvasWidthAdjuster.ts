@@ -14,11 +14,16 @@ export class CanvasWidthAdjuster
     this.canvas = canvas;
     this.height = height;
     this.cssBordersWidth = this.getCSSbordersWidthOfElement(canvas);
-    //this.adjust();
   }
   
   public adjust(): void
   {
+    console.log("dpr: " + CanvasWidthAdjuster.dpr);
+    console.log("dpr: " + window.devicePixelRatio);
+    console.log("outer: " + window.outerHeight);
+    console.log("inner: " + window.innerHeight);
+    console.log("ratio: " + window.outerHeight/window.innerHeight);
+
     const w = window.innerWidth - this.cssBordersWidth;
     this.canvas.width = w * CanvasWidthAdjuster.dpr;
     this.canvas.style.width = w + 'px';
