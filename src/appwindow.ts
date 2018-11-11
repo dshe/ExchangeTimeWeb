@@ -1,4 +1,4 @@
-import { DateTime, Duration } from 'luxon';
+import { DateTime } from 'luxon';
 import * as rxjs from 'rxjs';
 import { map, filter, throttleTime, scan, distinctUntilChanged, withLatestFrom, startWith } from 'rxjs/operators';
 import { Utility } from "./utility"
@@ -32,17 +32,24 @@ export class AppWindow
 
   private start() : void
   {
-    const tick = rxjs.timer(0,1000)
+    const tick$ = rxjs
+      .interval(1000)
+      .pipe(startWith(0))
       .pipe(map(() => DateTime.local()))
       //.pipe(map(() => DateTime.fromISO("2020-07-20T11:30")))
       .pipe(map(dt => dt.minus(dt.millisecond)));
       
-    const resize = rxjs.fromEvent<Event>(window, 'resize')
-      .pipe(throttleTime(50, undefined, { leading: true, trailing: true } ));
+    const resize$ = rxjs
+      .fromEvent<Event>(window, 'resize')
+      .pipe(map(() => ""))
+      .pipe(startWith(""));
+   
+      //.pipe(throttleTime(50, undefined, { leading: false, trailing: true } ));
 
-    const zoomIndex = rxjs.fromEvent<WheelEvent>(document, "wheel")
+    const zoomIndex$ = rxjs
+      .fromEvent<WheelEvent>(document, "wheel")
       .pipe(filter(event => event.ctrlKey === true))
-      .pipe(throttleTime(200, undefined, { leading: true, trailing: false }))
+      //.pipe(throttleTime(200, undefined, { leading: true, trailing: false }))
       .pipe(map(event => event.wheelDelta))
       .pipe(map(delta => delta > 0 ? 1 : -1))
       .pipe(startWith(0))
@@ -50,22 +57,20 @@ export class AppWindow
       .pipe(distinctUntilChanged());
     
     //combine/withLatest will not emit an initial value until each observable emits at least one value.
-    rxjs.merge<string,string,string>(
-      tick.pipe(map(() => "tick")), 
-      resize.pipe(map(() => "resize")),
-      zoomIndex.pipe(map(() => "zoom")))
-        .pipe(withLatestFrom(tick, zoomIndex))
-        .pipe(map(a => ({ type: a[0], time: a[1], zoomIndex: a[2]})))
-        .subscribe((msg) => this.draw(msg));
+    rxjs
+      .combineLatest<DateTime,string,number>(tick$, resize$, zoomIndex$)
+      //.pipe(withLatestFrom(tick$, zoomIndex$))
+      .pipe(map(a => ({ time: a[0], type: a[1], zoomIndex: a[2]})))
+      .subscribe((msg) => this.draw(msg.time, msg.type, msg.zoomIndex));
   }
 
-  public draw(msg: {type: string, time: DateTime, zoomIndex: number}): void
+  public draw(time: DateTime, type: string, zoomIndex: number): void
   {
-    console.log(msg.time.toString() + " " + msg.type + " " + msg.zoomIndex); 
-    if (msg.type == "resize")
-      this.canvasWidthAdjuster.adjust();
-    this.now = msg.time;
-    this.zoomer.index = msg.zoomIndex;  
+    //console.log(time.toString() + " " + resize+ " " + zoomIndex); 
+    //if (msg.type == "resize")
+    //  this.canvasWidthAdjuster.adjust();
+    this.now = time;
+    this.zoomer.index = zoomIndex;  
     this.originSeconds = this.now.toMillis() / 1000 - this.zoomer.secondsPerPixel * this.canvas.width / 3; 
     //console.log("orginSeconds: "+ this.originSeconds);
     this.ctx.fillStyle = "black";

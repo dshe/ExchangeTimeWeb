@@ -14,7 +14,7 @@ export class CanvasWidthAdjuster
     this.canvas = canvas;
     this.height = height;
     this.cssBordersWidth = this.getCSSbordersWidthOfElement(canvas);
-    this.adjust();
+    //this.adjust();
   }
   
   public adjust(): void
