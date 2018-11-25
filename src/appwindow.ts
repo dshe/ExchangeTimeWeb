@@ -27,6 +27,8 @@ export class AppWindow
     this.canvas = ctx.canvas;
     const height = (2 + this.locations.length) * this.rowHeight;
     this.canvasWidthAdjuster = new CanvasWidthAdjuster(ctx.canvas, height);
+    this.ctx.fillStyle = 'black';
+    this.ctx.fill();
     this.start();
   }
 
