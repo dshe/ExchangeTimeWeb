@@ -40,13 +40,14 @@ export class AppWindow
       .pipe(map(() => DateTime.local()))
       //.pipe(map(() => DateTime.fromISO("2020-07-20T11:30")))
       .pipe(map(dt => dt.minus(dt.millisecond)));
-      
+
     const zoomIndex$ = rxjs
       .fromEvent<WheelEvent>(document, "wheel")
-      .pipe(filter(event => event.shiftKey === true))
+      .pipe(filter(event => event.ctrlKey === true))
+      //.pipe(tap(event => function(event:Event) { event.preventDefault(); event.stopImmediatePropagation()})) 
       .pipe(throttleTime(100, undefined, { leading: true, trailing: false }))
+      //.pipe(tap(event => console.log("delta: " + event.deltaY)))
       .pipe(map(event => event.deltaY))
-      //.pipe(tap(delta => console.log("delta: " + delta)))
       .pipe(map(delta => delta > 0 ? 1 : -1))
       .pipe(startWith(0))
       .pipe(scan((acc, x) => Utility.clamp(acc + x, 0, this.zoomer.length - 1), 7))
