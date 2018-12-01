@@ -1,10 +1,11 @@
 import { DateTime } from 'luxon';
 import * as rxjs from 'rxjs';
-import { map, tap, filter, throttleTime, scan, distinctUntilChanged, withLatestFrom, startWith } from 'rxjs/operators';
+import { map, tap, filter, throttleTime, scan, distinctUntilChanged, startWith } from 'rxjs/operators';
+import { Clock$ } from "./clock"
 import { Utility } from "./utility"
 import { BarType } from './enums';
 import { Rectangle } from "./rectangle";
-import { CanvasWidthAdjuster } from "./canvasWidthAdjuster";
+import { CanvasSizeAdjuster } from "./canvasSizeAdjuster";
 import { DataParser, Location } from "./dataParser";
 import { Zoomer } from "./zoomer";
 import * as audio from "./audio";
@@ -15,7 +16,7 @@ export class AppWindow
   private readonly fontName = "arial";
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly canvasWidthAdjuster: CanvasWidthAdjuster;
+  private readonly canvasSizeAdjuster: CanvasSizeAdjuster;
   private readonly rowHeight: number = 40;
   private readonly zoomer: Zoomer = new Zoomer();
   private now: DateTime = DateTime.local();
@@ -26,7 +27,7 @@ export class AppWindow
     this.ctx = ctx;
     this.canvas = ctx.canvas;
     const height = (2 + this.locations.length) * this.rowHeight;
-    this.canvasWidthAdjuster = new CanvasWidthAdjuster(ctx.canvas, height);
+    this.canvasSizeAdjuster = new CanvasSizeAdjuster(ctx.canvas, height);
     this.ctx.fillStyle = 'black';
     this.ctx.fill();
     this.start();
@@ -34,17 +35,20 @@ export class AppWindow
 
   private start() : void
   {
-    const tick$ = rxjs
-      .interval(1000)
-      .pipe(startWith(0))
-      .pipe(map(() => DateTime.local()))
-      //.pipe(map(() => DateTime.fromISO("2020-07-20T11:30")))
-      .pipe(map(dt => dt.minus(dt.millisecond)));
-
+    const tick$ = Clock$
+      //.pipe(map(() => DateTime.fromISO("2020-07-20T11:30")));
+  
+    const width$ = rxjs
+      .fromEvent<Event>(window, 'resize')
+      //.pipe(throttleTime(50, undefined, { leading: true, trailing: true } ))
+      .pipe(startWith(""))
+      .pipe(map(() => this.canvas.parentElement as HTMLElement))
+      .pipe(map(parent => parent.clientWidth))
+      .pipe(distinctUntilChanged());
+  
     const zoomIndex$ = rxjs
       .fromEvent<WheelEvent>(document, "wheel")
       .pipe(filter(event => event.ctrlKey === true))
-      //.pipe(tap(event => function(event:Event) { event.preventDefault(); event.stopImmediatePropagation()})) 
       .pipe(throttleTime(100, undefined, { leading: true, trailing: false }))
       //.pipe(tap(event => console.log("delta: " + event.deltaY)))
       .pipe(map(event => event.deltaY))
@@ -52,26 +56,17 @@ export class AppWindow
       .pipe(startWith(0))
       .pipe(scan((acc, x) => Utility.clamp(acc + x, 0, this.zoomer.length - 1), 7))
       .pipe(distinctUntilChanged());
- 
-    const resize$ = rxjs
-      .fromEvent<Event>(window, 'resize')
-      .pipe(throttleTime(50, undefined, { leading: true, trailing: true } ))
-      .pipe(startWith(""))
-      .pipe(map(() => "resize"))
-      
-    //combine/withLatest will not emit an initial value until each observable emits at least one value.
-    rxjs.merge<string,string,string>
-      (tick$.pipe(map(() => "tick")), zoomIndex$.pipe(map(() => "zoom")), resize$)
-      .pipe(withLatestFrom(tick$, zoomIndex$))
-      .subscribe((x) => this.draw(x[0], x[1], x[2]));
+     
+    //combineLatest will not emit an initial value until each observable emits at least one value.
+    rxjs.combineLatest(tick$, width$, zoomIndex$)
+     .subscribe(x => this.draw(x[0], x[1], x[2]));
   }
 
-  public draw(eventType: string, time: DateTime, zoomIndex: number): void
+  public draw(time: DateTime, width: number, zoomIndex: number): void
   {
-    console.log(time + " " + eventType + " " + zoomIndex);
-    if (eventType === "resize")
-      this.canvasWidthAdjuster.adjust();
+    console.log("time=" + time.toISO() + ", width=" + width + ", zoomIndex=" + zoomIndex);
     this.now = time;
+    this.canvasSizeAdjuster.adjust(width);
     this.zoomer.index = zoomIndex;  
     this.originSeconds = this.now.toMillis() / 1000 - this.zoomer.secondsPerPixel * this.canvas.width / 3; 
     //console.log("orginSeconds: "+ this.originSeconds);

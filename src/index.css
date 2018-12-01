@@ -4,6 +4,10 @@ body {
   margin: 0;
 }
 
+#myDiv {
+  border: 2px solid #777;
+}
+
 #myCanvas {
-  border: 2px solid #777
+  display: block;
 }
