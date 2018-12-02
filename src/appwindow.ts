@@ -5,19 +5,19 @@ import { Clock$ } from "./clock"
 import { Utility } from "./utility"
 import { BarType } from './enums';
 import { Rectangle } from "./rectangle";
-import { CanvasSizeAdjuster } from "./canvasSizeAdjuster";
 import { DataParser, Location } from "./dataParser";
 import { Zoomer } from "./zoomer";
 import * as audio from "./audio";
 
 export class AppWindow
 {
+  private readonly dpr: number = window.devicePixelRatio || 1;
   private readonly locations: Location[] = DataParser.Parse();
   private readonly fontName = "arial";
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly canvasSizeAdjuster: CanvasSizeAdjuster;
   private readonly rowHeight: number = 40;
+  private readonly height: number;
   private readonly zoomer: Zoomer = new Zoomer();
   private now: DateTime = DateTime.local();
   private originSeconds: number = 0;
@@ -26,8 +26,7 @@ export class AppWindow
   { 
     this.ctx = ctx;
     this.canvas = ctx.canvas;
-    const height = (2 + this.locations.length) * this.rowHeight;
-    this.canvasSizeAdjuster = new CanvasSizeAdjuster(ctx.canvas, height);
+    this.height = (2 + this.locations.length) * this.rowHeight;
     this.ctx.fillStyle = 'black';
     this.ctx.fill();
     this.start();
@@ -66,12 +65,20 @@ export class AppWindow
   {
     console.log("time=" + time.toISO() + ", width=" + width + ", zoomIndex=" + zoomIndex);
     this.now = time;
-    this.canvasSizeAdjuster.adjust(width);
+
+    this.canvas.width = width * this.dpr;
+    this.canvas.style.width = width + 'px';  
+    this.canvas.height = this.height;
+    this.canvas.style.height = this.height / this.dpr + 'px';
+
     this.zoomer.index = zoomIndex;  
+
     this.originSeconds = this.now.toMillis() / 1000 - this.zoomer.secondsPerPixel * this.canvas.width / 3; 
     //console.log("orginSeconds: "+ this.originSeconds);
+
     this.ctx.fillStyle = "black";
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
     this.drawTopRow();
     this.drawTicks();
     this.drawRows();
