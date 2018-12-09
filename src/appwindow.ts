@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon';
-import * as rxjs from 'rxjs';
+//import * as rxjs from 'rxjs';
+import { Observable, fromEvent, combineLatest } from 'rxjs';
 import { map, tap, filter, throttleTime, scan, distinctUntilChanged, startWith } from 'rxjs/operators';
-import { Clock$ } from "./clock"
 import { Utility } from "./utility"
 import { BarType } from './enums';
 import { Rectangle } from "./rectangle";
@@ -34,31 +34,37 @@ export class AppWindow
 
   private start() : void
   {
-    const tick$ = Clock$
-      //.pipe(map(() => DateTime.fromISO("2020-07-20T11:30")));
+    const tick$ = new Observable<DateTime>(observer =>
+    {
+      const fcn = () => {
+        observer.next(DateTime.local());
+        setTimeout(fcn, 1000 - DateTime.local().millisecond);
+      };
+      fcn();
+    })//.pipe(map(() => DateTime.fromISO("2020-07-20T11:30")));
   
-    const width$ = rxjs
-      .fromEvent<Event>(window, 'resize')
-      //.pipe(throttleTime(50, undefined, { leading: true, trailing: true } ))
-      .pipe(startWith(""))
-      .pipe(map(() => this.canvas.parentElement as HTMLElement))
-      .pipe(map(parent => parent.clientWidth))
-      .pipe(distinctUntilChanged());
+    const width$ = fromEvent<Event>(window, 'resize')
+      .pipe(
+        //throttleTime(50, undefined, { leading: true, trailing: true } ),
+        startWith(""),
+        map(() => this.canvas.parentElement as HTMLElement), 
+        map(parent => parent.clientWidth),
+        distinctUntilChanged());
   
-    const zoomIndex$ = rxjs
-      .fromEvent<WheelEvent>(document, "wheel")
-      .pipe(filter(event => event.ctrlKey === true))
-      .pipe(throttleTime(100, undefined, { leading: true, trailing: false }))
-      //.pipe(tap(event => console.log("delta: " + event.deltaY)))
-      .pipe(map(event => event.deltaY))
-      .pipe(map(delta => delta > 0 ? 1 : -1))
-      .pipe(startWith(0))
-      .pipe(scan((acc, x) => Utility.clamp(acc + x, 0, this.zoomer.length - 1), 7))
-      .pipe(distinctUntilChanged());
+    const zoomIndex$ = fromEvent<WheelEvent>(document, "wheel")
+      .pipe(
+        filter(event => event.ctrlKey === true),
+        throttleTime(100, undefined, { leading: true, trailing: false }),
+        //tap(event => console.log("delta: " + event.deltaY)),
+        map(event => event.deltaY),
+        map(delta => delta > 0 ? 1 : -1),
+        startWith(0),
+        scan((acc, x) => Utility.clamp(acc + x, 0, this.zoomer.length - 1), 7),
+        distinctUntilChanged());
      
     //combineLatest will not emit an initial value until each observable emits at least one value.
-    rxjs.combineLatest(tick$, width$, zoomIndex$)
-     .subscribe(x => this.draw(x[0], x[1], x[2]));
+    combineLatest(tick$, width$, zoomIndex$)
+      .subscribe(x => this.draw(x[0], x[1], x[2]));
   }
 
   public draw(time: DateTime, width: number, zoomIndex: number): void
@@ -66,11 +72,11 @@ export class AppWindow
     console.log("time=" + time.toISO() + ", width=" + width + ", zoomIndex=" + zoomIndex);
     this.now = time;
 
-    this.canvas.width = width * this.dpr;
-    this.canvas.style.width = width + 'px';  
-    this.canvas.height = this.height;
+    this.canvas.style.width = width + 'px';
     this.canvas.style.height = this.height / this.dpr + 'px';
-
+    this.canvas.width = width * this.dpr;
+    this.canvas.height = this.height;
+  
     this.zoomer.index = zoomIndex;  
 
     this.originSeconds = this.now.toMillis() / 1000 - this.zoomer.secondsPerPixel * this.canvas.width / 3; 
@@ -208,42 +214,42 @@ export class AppWindow
   private drawBar(y: number, start: DateTime, end: DateTime, barType: BarType, label: string): void
   {  
     if (start >= end)
-        end = end.plus({days: 1});
+      end = end.plus({days: 1});
     if (start >= end)
-        return;
+      return;
 
     let x1 = this.dateToPixels(start);
     let x2 = this.dateToPixels(end);   
     if (x1 <= 0)
-        x1 = 0;
+      x1 = 0;
     else if (x1 >= this.canvas.width)
-        return;
+      return;
     if (x2 >= this.canvas.width)
-        x2 = this.canvas.width - 1;
+      x2 = this.canvas.width - 1;
     if (x2 < 0)
-        return;
+      return;
 
     const rect = new Rectangle(this.ctx, x1, y, x2 - x1 + 1, this.rowHeight);
 
     switch (barType)
     {
-        case BarType.Holiday:
-        case BarType.Weekend:
-          rect.fillRect(.5);
+      case BarType.Holiday:
+      case BarType.Weekend:
+        rect.fillRect(.5);
+        rect.fitText(label, "#ddd");
+        break;
+      case BarType.L:
+        rect.fillRect(.9);
+        if (this.zoomer.secondsPerPixel < 1800)
           rect.fitText(label, "#ddd");
-          break;
-        case BarType.L:
-          rect.fillRect(.9);
-          if (this.zoomer.secondsPerPixel < 1800)
-            rect.fitText(label, "#ddd");
-          break;
-        case BarType.M:
-          rect.changeHeight(.3);
-          rect.fillRect(.9);
-          break;
-        case BarType.S:
-          rect.changeHeight(.1);
-          rect.fillRect(.9);
+        break;
+      case BarType.M:
+        rect.changeHeight(.3);
+        rect.fillRect(.9);
+        break;
+      case BarType.S:
+        rect.changeHeight(.1);
+        rect.fillRect(.9);
     }
   }
 
