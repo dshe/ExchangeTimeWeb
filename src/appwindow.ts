@@ -36,11 +36,19 @@ export class AppWindow
   {
     const tick$ = new Observable<DateTime>(observer =>
     {
+      let disposing = false;
       const fcn = () => {
         observer.next(DateTime.local());
-        setTimeout(fcn, 1000 - DateTime.local().millisecond);
+        if (disposing)
+          observer.complete();
+        else
+          setTimeout(fcn, 1000 - DateTime.local().millisecond);
       };
       fcn();
+      return () => {
+        disposing = true;
+        console.log('disposing');
+      }
     })//.pipe(map(() => DateTime.fromISO("2020-07-20T11:30")));
   
     const width$ = fromEvent<Event>(window, 'resize')
@@ -63,8 +71,14 @@ export class AppWindow
         distinctUntilChanged());
      
     //combineLatest will not emit an initial value until each observable emits at least one value.
-    combineLatest(tick$, width$, zoomIndex$)
+    var sub = combineLatest(tick$, width$, zoomIndex$)
       .subscribe(x => this.draw(x[0], x[1], x[2]));
+    //sub.unsubscribe();
+
+    window.close = () => {
+        console.log("closing");
+    }
+
   }
 
   public draw(time: DateTime, width: number, zoomIndex: number): void
